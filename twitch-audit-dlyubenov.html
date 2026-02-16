@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dlyubenov - Twitch Channel Audit Report</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Oswald:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #0e0e10;
+            --bg-card: #18181b;
+            --border-color: #2c2c34;
+            --text-primary: #efeff1;
+            --text-secondary: #adadb8;
+            --critical-red: #ff3838;
+            --warning-orange: #ff9500;
+            --alert-yellow: #ffd700;
+            --twitch-purple: #9147ff;
+            --accent-cyan: #00f5ff;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.03;
+            z-index: 1000;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='4' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+
+        .scan-line {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--critical-red), transparent);
+            animation: scan 8s linear infinite;
+            pointer-events: none;
+            z-index: 999;
+            opacity: 0.3;
+        }
+
+        @keyframes scan {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(100vh); }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 60px 30px;
+        }
+
+        header {
+            border-bottom: 2px solid var(--critical-red);
+            padding-bottom: 40px;
+            margin-bottom: 60px;
+            position: relative;
+            animation: slideDown 0.8s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .channel-logo {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 3px solid var(--critical-red);
+            box-shadow: 0 0 30px rgba(255, 56, 56, 0.3);
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(255, 56, 56, 0.3); }
+            50% { box-shadow: 0 0 50px rgba(255, 56, 56, 0.6); }
+        }
+
+        .channel-info h1 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 3.5rem;
+            font-weight: 700;
+            letter-spacing: -2px;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .status-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--critical-red), #d32f2f);
+            padding: 8px 20px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(255, 56, 56, 0.4);
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 4px 15px rgba(255, 56, 56, 0.4); }
+            50% { box-shadow: 0 4px 25px rgba(255, 56, 56, 0.7); }
+        }
+
+        .audit-timestamp {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 20px;
+        }
+
+        .alert-banner {
+            background: linear-gradient(135deg, rgba(255, 56, 56, 0.15), rgba(255, 56, 56, 0.05));
+            border-left: 4px solid var(--critical-red);
+            padding: 25px 30px;
+            margin: 40px 0;
+            border-radius: 8px;
+            animation: fadeIn 1s ease-out 0.3s both;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .alert-banner h2 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.8rem;
+            color: var(--critical-red);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin: 50px 0;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 30px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            animation: fadeIn 1s ease-out both;
+        }
+
+        .stat-card:nth-child(1) { animation-delay: 0.1s; }
+        .stat-card:nth-child(2) { animation-delay: 0.2s; }
+        .stat-card:nth-child(3) { animation-delay: 0.3s; }
+        .stat-card:nth-child(4) { animation-delay: 0.4s; }
+        .stat-card:nth-child(5) { animation-delay: 0.5s; }
+        .stat-card:nth-child(6) { animation-delay: 0.6s; }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--critical-red), var(--warning-orange));
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--critical-red);
+            box-shadow: 0 10px 30px rgba(255, 56, 56, 0.2);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-family: 'Oswald', sans-serif;
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 5px;
+            line-height: 1;
+        }
+
+        .stat-context {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .stat-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-top: 10px;
+        }
+
+        .indicator-critical {
+            background: rgba(255, 56, 56, 0.2);
+            color: var(--critical-red);
+            border: 1px solid var(--critical-red);
+        }
+
+        .indicator-warning {
+            background: rgba(255, 149, 0, 0.2);
+            color: var(--warning-orange);
+            border: 1px solid var(--warning-orange);
+        }
+
+        section {
+            margin: 60px 0;
+        }
+
+        h2 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 2.2rem;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            padding-left: 20px;
+        }
+
+        h2::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--critical-red);
+        }
+
+        .issues-list {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 30px;
+        }
+
+        .issue-item {
+            display: flex;
+            gap: 20px;
+            padding: 25px 0;
+            border-bottom: 1px solid var(--border-color);
+            animation: fadeIn 1s ease-out both;
+        }
+
+        .issue-item:nth-child(1) { animation-delay: 0.2s; }
+        .issue-item:nth-child(2) { animation-delay: 0.3s; }
+        .issue-item:nth-child(3) { animation-delay: 0.4s; }
+        .issue-item:nth-child(4) { animation-delay: 0.5s; }
+        .issue-item:nth-child(5) { animation-delay: 0.6s; }
+        .issue-item:nth-child(6) { animation-delay: 0.7s; }
+        .issue-item:nth-child(7) { animation-delay: 0.8s; }
+
+        .issue-item:last-child {
+            border-bottom: none;
+        }
+
+        .issue-icon {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 56, 56, 0.15);
+            border: 2px solid var(--critical-red);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .issue-content h3 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.3rem;
+            color: var(--critical-red);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .issue-description {
+            color: var(--text-secondary);
+            line-height: 1.8;
+        }
+
+        .severity-tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-top: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        .severity-high {
+            background: rgba(255, 56, 56, 0.2);
+            color: var(--critical-red);
+            border: 1px solid var(--critical-red);
+        }
+
+        .severity-medium {
+            background: rgba(255, 149, 0, 0.2);
+            color: var(--warning-orange);
+            border: 1px solid var(--warning-orange);
+        }
+
+        .performance-chart {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 40px;
+            margin: 30px 0;
+        }
+
+        .chart-bar {
+            margin: 25px 0;
+        }
+
+        .chart-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .chart-label-text {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .chart-label-value {
+            color: var(--text-secondary);
+        }
+
+        .chart-bar-bg {
+            width: 100%;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .chart-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--critical-red), var(--warning-orange));
+            border-radius: 15px;
+            position: relative;
+            transition: width 1.5s ease-out 0.5s;
+            animation: barGrow 1.5s ease-out 0.5s both;
+        }
+
+        @keyframes barGrow {
+            from { width: 0; }
+        }
+
+        .chart-bar-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .recommendations {
+            background: linear-gradient(135deg, rgba(0, 245, 255, 0.05), rgba(145, 71, 255, 0.05));
+            border: 1px solid var(--twitch-purple);
+            border-radius: 12px;
+            padding: 40px;
+        }
+
+        .recommendations h3 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.5rem;
+            color: var(--accent-cyan);
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+
+        .recommendation-item {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-cyan);
+        }
+
+        .recommendation-number {
+            width: 35px;
+            height: 35px;
+            background: var(--accent-cyan);
+            color: var(--bg-dark);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .recommendation-text {
+            flex: 1;
+            line-height: 1.8;
+        }
+
+        footer {
+            margin-top: 80px;
+            padding-top: 40px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            .channel-info h1 {
+                font-size: 2.5rem;
+            }
+
+            h2 {
+                font-size: 1.8rem;
+            }
+
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="noise-overlay"></div>
+    <div class="scan-line"></div>
+
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <img src="lyubenoff-logo.png" alt="Dlyubenov Logo" class="channel-logo">
+                <div class="channel-info">
+                    <h1>Dlyubenov</h1>
+                    <div class="status-badge">⚠ CRITICAL PERFORMANCE ISSUES</div>
+                </div>
+            </div>
+            <p class="audit-timestamp">AUDIT GENERATED: February 16, 2026 | STATUS: Affiliate | Last Live: 18 hours ago</p>
+        </header>
+
+        <div class="alert-banner">
+            <h2>🚨 Channel Health: FAILING</h2>
+            <p>This channel exhibits multiple critical performance deficiencies affecting discoverability, growth potential, and algorithmic ranking. Immediate intervention required to prevent further decline.</p>
+        </div>
+
+        <section>
+            <h2>Performance Metrics</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Followers</div>
+                    <div class="stat-value">727</div>
+                    <div class="stat-context">Extremely low for 14+ months</div>
+                    <div class="stat-indicator indicator-critical">⚠ 99.15% of channels ahead</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Average Viewers</div>
+                    <div class="stat-value">21.2</div>
+                    <div class="stat-context">Below partnership threshold</div>
+                    <div class="stat-indicator indicator-critical">⚠ Critically Low</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Global Ranking</div>
+                    <div class="stat-value">#60,807</div>
+                    <div class="stat-context">Out of millions of channels</div>
+                    <div class="stat-indicator indicator-warning">⚠ Bottom 1%</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">English Ranking</div>
+                    <div class="stat-value">#28,131</div>
+                    <div class="stat-context">In English category</div>
+                    <div class="stat-indicator indicator-critical">⚠ Poor visibility</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Channel Age</div>
+                    <div class="stat-value">14mo</div>
+                    <div class="stat-context">Since Dec 22, 2023</div>
+                    <div class="stat-indicator indicator-critical">⚠ Slow growth rate</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Follower/Month</div>
+                    <div class="stat-value">~52</div>
+                    <div class="stat-context">Unsustainable pace</div>
+                    <div class="stat-indicator indicator-critical">⚠ Below average</div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Algorithm Performance Analysis</h2>
+            <div class="performance-chart">
+                <div class="chart-bar">
+                    <div class="chart-label">
+                        <span class="chart-label-text">Discoverability Score</span>
+                        <span class="chart-label-value">12/100</span>
+                    </div>
+                    <div class="chart-bar-bg">
+                        <div class="chart-bar-fill" style="width: 12%;"></div>
+                    </div>
+                </div>
+
+                <div class="chart-bar">
+                    <div class="chart-label">
+                        <span class="chart-label-text">Growth Velocity</span>
+                        <span class="chart-label-value">8/100</span>
+                    </div>
+                    <div class="chart-bar-bg">
+                        <div class="chart-bar-fill" style="width: 8%;"></div>
+                    </div>
+                </div>
+
+                <div class="chart-bar">
+                    <div class="chart-label">
+                        <span class="chart-label-text">Viewer Retention</span>
+                        <span class="chart-label-value">28/100</span>
+                    </div>
+                    <div class="chart-bar-bg">
+                        <div class="chart-bar-fill" style="width: 28%;"></div>
+                    </div>
+                </div>
+
+                <div class="chart-bar">
+                    <div class="chart-label">
+                        <span class="chart-label-text">Algorithm Favorability</span>
+                        <span class="chart-label-value">6/100</span>
+                    </div>
+                    <div class="chart-bar-bg">
+                        <div class="chart-bar-fill" style="width: 6%;"></div>
+                    </div>
+                </div>
+
+                <div class="chart-bar">
+                    <div class="chart-label">
+                        <span class="chart-label-text">Engagement Rate</span>
+                        <span class="chart-label-value">15/100</span>
+                    </div>
+                    <div class="chart-bar-bg">
+                        <div class="chart-bar-fill" style="width: 15%;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Critical Issues Detected</h2>
+            <div class="issues-list">
+                <div class="issue-item">
+                    <div class="issue-icon">⛔</div>
+                    <div class="issue-content">
+                        <h3>Severely Limited Reach</h3>
+                        <p class="issue-description">With only 727 followers after 14 months, the channel is experiencing catastrophic growth failure. The Twitch algorithm heavily penalizes channels with low engagement metrics, creating a visibility death spiral.</p>
+                        <span class="severity-tag severity-high">SEVERITY: CRITICAL</span>
+                    </div>
+                </div>
+
+                <div class="issue-item">
+                    <div class="issue-icon">📉</div>
+                    <div class="issue-content">
+                        <h3>Bottom 0.85% Performance</h3>
+                        <p class="issue-description">Ranking in the bottom 1% of all Twitch channels indicates fundamental issues with content strategy, discoverability, or audience targeting. The channel is nearly invisible to new viewers.</p>
+                        <span class="severity-tag severity-high">SEVERITY: CRITICAL</span>
+                    </div>
+                </div>
+
+                <div class="issue-item">
+                    <div class="issue-icon">👥</div>
+                    <div class="issue-content">
+                        <h3>Low Average Viewership</h3>
+                        <p class="issue-description">21.2 average viewers is significantly below partnership requirements (75 avg viewers) and indicates poor viewer retention. This metric directly impacts algorithmic promotion and channel recommendations.</p>
+                        <span class="severity-tag severity-high">SEVERITY: CRITICAL</span>
+                    </div>
+                </div>
+
+                <div class="issue-item">
+                    <div class="issue-icon">🎯</div>
+                    <div class="issue-content">
+                        <h3>Poor Category Positioning</h3>
+                        <p class="issue-description">Ranked #28,131 in English channels suggests the channel is drowning in competition without differentiation. Missing key optimization opportunities in titles, tags, and category selection.</p>
+                        <span class="severity-tag severity-high">SEVERITY: HIGH</span>
+                    </div>
+                </div>
+
+                <div class="issue-item">
+                    <div class="issue-icon">⏱️</div>
+                    <div class="issue-content">
+                        <h3>Inconsistent Streaming Schedule</h3>
+                        <p class="issue-description">The bio mentions "just enjoying playing with family and friends" which indicates a lack of professional streaming commitment. Inconsistent schedules destroy algorithmic momentum and viewer habit formation.</p>
+                        <span class="severity-tag severity-medium">SEVERITY: HIGH</span>
+                    </div>
+                </div>
+
+                <div class="issue-item">
+                    <div class="issue-icon">🔍</div>
+                    <div class="issue-content">
+                        <h3>Zero SEO Optimization</h3>
+                        <p class="issue-description">Channel lacks strategic use of keywords, tags, and metadata that would improve discoverability through search and recommendations. Missing critical opportunities for organic growth.</p>
+                        <span class="severity-tag severity-medium">SEVERITY: HIGH</span>
+                    </div>
+                </div>
+
+                <div class="issue-item">
+                    <div class="issue-icon">💀</div>
+                    <div class="issue-content">
+                        <h3>Defeatist Positioning</h3>
+                        <p class="issue-description">Bio statement about "older age" and reflexes creates a negative frame that repels potential viewers. Self-deprecating messaging undermines confidence and brand authority.</p>
+                        <span class="severity-tag severity-medium">SEVERITY: MEDIUM</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <div class="recommendations">
+                <h3>🔧 Critical Action Items</h3>
+                
+                <div class="recommendation-item">
+                    <div class="recommendation-number">1</div>
+                    <div class="recommendation-text">
+                        <strong>Establish Fixed Streaming Schedule:</strong> Create and maintain a consistent 3-4 day per week schedule. Post schedule publicly and stick to it for minimum 90 days to rebuild algorithmic trust.
+                    </div>
+                </div>
+
+                <div class="recommendation-item">
+                    <div class="recommendation-number">2</div>
+                    <div class="recommendation-text">
+                        <strong>Complete Content Repositioning:</strong> Remove defeatist language from bio. Focus on strengths: experience, strategy knowledge, community vibe. Reframe "age" as "veteran perspective."
+                    </div>
+                </div>
+
+                <div class="recommendation-item">
+                    <div class="recommendation-number">3</div>
+                    <div class="recommendation-text">
+                        <strong>Implement SEO Strategy:</strong> Research high-traffic, low-competition game categories. Optimize titles with keyword-rich formats: "[GAME] - [UNIQUE ANGLE] - [HOOK]"
+                    </div>
+                </div>
+
+                <div class="recommendation-item">
+                    <div class="recommendation-number">4</div>
+                    <div class="recommendation-text">
+                        <strong>Create Clip Funnel System:</strong> Generate 5-10 clips per stream highlighting best moments. Post to TikTok, YouTube Shorts, Instagram Reels with channel link. This is non-negotiable for growth.
+                    </div>
+                </div>
+
+                <div class="recommendation-item">
+                    <div class="recommendation-number">5</div>
+                    <div class="recommendation-text">
+                        <strong>Develop Unique Value Proposition:</strong> "Just enjoying with friends" is not a brand. Define what makes this channel worth watching vs 10,000 similar streamers. Execute consistently.
+                    </div>
+                </div>
+
+                <div class="recommendation-item">
+                    <div class="recommendation-number">6</div>
+                    <div class="recommendation-text">
+                        <strong>Aggressive Community Building:</strong> Network in 5-10 similar-sized channels. Participate genuinely in communities. Cross-promote. Host other streamers. Build alliances.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>Audit Report Generated: February 16, 2026 | Data Source: Twitch Tracker & Analytics</p>
+            <p style="margin-top: 10px; color: var(--critical-red);">⚠ This channel requires immediate strategic intervention to prevent permanent algorithmic suppression</p>
+        </footer>
+    </div>
+
+    <script>
+        // Add interactivity for bar chart animations on scroll
+        const observerOptions = {
+            threshold: 0.2,
+            rootMargin: '0px 0px -100px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.animation = 'none';
+                    setTimeout(() => {
+                        entry.target.style.animation = '';
+                    }, 10);
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.chart-bar-fill').forEach(bar => {
+            observer.observe(bar);
+        });
+
+        // Add glitch effect on critical elements occasionally
+        setInterval(() => {
+            const criticalElements = document.querySelectorAll('.status-badge, .severity-high');
+            const randomElement = criticalElements[Math.floor(Math.random() * criticalElements.length)];
+            if (randomElement && Math.random() > 0.7) {
+                randomElement.style.transform = `translate(${Math.random() * 4 - 2}px, ${Math.random() * 4 - 2}px)`;
+                setTimeout(() => {
+                    randomElement.style.transform = 'translate(0, 0)';
+                }, 100);
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
